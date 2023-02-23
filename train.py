@@ -13,16 +13,9 @@ from mipnerf import MipNeRFWrapper
 from settings import Settings
 from dataset import load_dataset
 
-#TODO mipnerf eval render
-def render(model, settings, iter, dataset, train_psnrs, iternums, val_psnrs, img_id = 101):
-    height = dataset.height
-    width = dataset.width
-    focal = dataset.focal
-    pose = dataset.poses[img_id]
-    rays_o, rays_d = dataset.get_rays(height, width, focal, pose)
-    rays_o = rays_o.reshape(-1, 3)
-    rays_d = rays_d.reshape(-1, 3)
-    outputs = model(rays_o, rays_d)
+def render(model, settings, iter, dataset, train_psnrs, iternums, val_psnrs):
+    rays, iamge = dataset[settings.val_id]
+    outputs = model(rays)
 
     def plot_samples(
         z_vals: torch.Tensor,
@@ -46,9 +39,9 @@ def render(model, settings, iter, dataset, train_psnrs, iternums, val_psnrs, img
         return ax
 
     fig, ax = plt.subplots(1, 4, figsize=(24, 4), gridspec_kw={'width_ratios': [1, 1, 1, 3]})
-    ax[0].imshow(outputs["rgb_map"].reshape([dataset.height, dataset.width, 3]).detach().cpu().numpy())
+    ax[0].imshow(outputs["rgb_map"].reshape([dataset.h, dataset.w, 3]).detach().cpu().numpy())
     ax[0].set_title(f'Iteration: {iter + 1}')
-    ax[1].imshow(dataset.images[img_id].detach().cpu().numpy())
+    ax[1].imshow(dataset.images[settings.val_id].detach().cpu().numpy())
     ax[1].set_title(f'Target')
     ax[2].plot(range(0, iter + 1), train_psnrs, 'r')
     ax[2].plot(iternums, val_psnrs, 'b')
@@ -65,7 +58,6 @@ def render(model, settings, iter, dataset, train_psnrs, iternums, val_psnrs, img
     ax[3].margins(0)
     plt.show()
 
-#TODO mipnerf training
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--local_rank", default=os.getenv("LOCAL_RANK", -1), type=int)
@@ -78,7 +70,7 @@ def main():
     settings = Settings()
     model = MipNeRFWrapper(settings)
     optimizer = torch.optim.Adam(model.parameters(), lr=settings.lr)
-    loader, sampler, dataset = load_dataset(settings.batch_size, device)
+    train_loader, train_sampler, train_set, val_set = load_dataset(settings.filepath)
     num_gpus = torch.cuda.device_count()
     if num_gpus > 1:
         model = torch.nn.DataParallel(model, device_ids=[args.local_rank])
@@ -90,9 +82,9 @@ def main():
     with tqdm(total=settings.n_iters, position=args.local_rank * 2) as pbar:
         for i in range(settings.n_iters):
             model.train()
-            sampler.set_epoch(i)
-            for rays_o, rays_d, rgb in loader:
-                outputs = model(rays_o, rays_d)
+            train_sampler.set_epoch(i)
+            for rays, rgb in train_loader:
+                outputs = model(rays)
                 # Check for any numerical issues.
                 for k, v in outputs.items():
                     if torch.isnan(v).any():
@@ -125,7 +117,7 @@ def main():
 
             if (i + 1) % settings.display_rate == 0:
                 model.eval()
-                render(model, settings, i, dataset, train_psnrs, iternums, val_psnrs)
+                render(model, settings, i, val_set, train_psnrs, iternums, val_psnrs)
 
             pbar.update(1)
 

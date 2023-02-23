@@ -2,6 +2,9 @@
 #TODO add settings whenever you need
 class Settings:
     def __init__(self):
+        # dataset
+        self.filepath = 'set when training'
+
         # Encoders
         self.d_input = 3             # Number of input dimensions
         self.n_freqs = 10            # Number of encoding functions for samples
@@ -43,6 +46,9 @@ class Settings:
         self.center_crop = True          # Crop the center of image (one_image_per_)
         self.center_crop_iters = 50      # Stop cropping center after this many epochs
         self.display_rate = 500         # Display test output every X epochs
+
+        # val
+        self.val_id = 0
 
         # Early Stopping
         self.warmup_iters = 100          # Number of iterations during warmup phase
