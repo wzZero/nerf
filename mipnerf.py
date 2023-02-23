@@ -66,7 +66,8 @@ class NeRF(nn.Module):
 
         return x
 
-#TODO: mipnerf forward process
+
+# TODO: mipnerf forward process
 class MipNeRFWrapper(nn.Module):
     def __init__(self, settings: Settings):
         super().__init__()
@@ -94,82 +95,76 @@ class MipNeRFWrapper(nn.Module):
         else:
             self.fine_model = None
 
-    def forward(self,rays):
+    def forward(self, rays, randomized):
         """
         :param rays: batch * (ray_o,ray_d,view_dirs)
         :return:
         """
-        ret = []
-        t_samples, weights = None, None
+        outputs = {}
 
-        # for i_level in range(2):
-        #     if i_level == 0:
-        #
-        # Sample query points along each ray.
-        query_points, z_vals = stratified_sample(rays_o, rays_d, self.ss.near, self.ss.far,
-                                                 **self.ss.kwargs_sample_stratified)
-        # Prepare batches.
-        batches = self.prepare_chunks(query_points, self.encoding_fn, chunksize=self.ss.chunksize)
+        # coarse model pass
+        mean_covs, z_vals = stratified_sample(
+            rays.origins,
+            rays.directions,
+            rays.near,
+            rays.far,
+            rays.radii,
+            **self.ss.kwargs_sample_stratified
+        )
+
+        sample_enc = self.encoding_fn(mean_covs)
         if self.viewdirs_encoding_fn is not None:
-            batches_viewdirs = self.prepare_viewdirs_chunks(query_points, rays_d, self.viewdirs_encoding_fn,
-                                                            chunksize=self.ss.chunksize)
+            viewdirs_enc = self.viewdirs_encoding_fn(rays.viewdirs)
+            raw_rgb, raw_density = self.coarse_model(sample_enc, viewdirs_enc)
         else:
-            batches_viewdirs = [None] * len(batches)
+            raw_rgb, raw_density = self.coarse_model(sample_enc)
 
-        # Coaese model pass.
-        predictions = []
-        for batch, batch_viewdirs in zip(batches, batches_viewdirs):
-            predictions.append(self.coarse_model(batch, viewdirs=batch_viewdirs))
-        raw = torch.cat(predictions, dim=0)
-        raw = raw.reshape(list(query_points.shape[:2]) + [raw.shape[-1]])
+        rgb_map_0, depth_map_0, acc_map_0, weights_0 = raw2outputs(
+            raw_rgb,
+            z_vals,
+            rays.directions,
+            raw_noise_std=self.ss.raw_noise_std
+        )
 
-        # Perform differentiable volume rendering to re-synthesize the RGB image.
-        rgb_map, depth_map, acc_map, weights = raw2outputs(raw, z_vals, rays_d)
-        outputs = {'z_vals_stratified': z_vals}
+        outputs['rgb_map_0'] = rgb_map_0
+        outputs['depth_map_0'] = depth_map_0
+        outputs['acc_map_0'] = acc_map_0
 
         # Fine model pass.
         if self.ss.n_samples_hierarchical > 0:
-            # Save previous outputs to return.
-            rgb_map_0, depth_map_0, acc_map_0 = rgb_map, depth_map, acc_map
-
             # Apply hierarchical sampling for fine query points.
-            query_points, z_vals_combined, z_hierarch = hierarchical_sample(
-                rays_o, rays_d, z_vals, weights, self.ss.n_samples_hierarchical,
+            means_covs_fine, z_vals_fine = hierarchical_sample(
+                rays.origins,
+                rays.directions,
+                z_vals,
+                weights_0,
+                rays.radii,
+                self.ss.n_samples_hierarchical,
                 **self.ss.kwargs_sample_hierarchical
             )
 
             # Prepare inputs as before.
-            batches = self.prepare_chunks(query_points, self.encoding_fn, chunksize=self.ss.chunksize)
-            if self.viewdirs_encoding_fn is not None:
-                batches_viewdirs = self.prepare_viewdirs_chunks(query_points, rays_d, self.viewdirs_encoding_fn,
-                                                                chunksize=self.ss.chunksize)
-            else:
-                batches_viewdirs = [None] * len(batches)
 
             # Forward pass new samples through fine model.
             if self.fine_model is None:
                 self.fine_model = self.coarse_model
 
-            predictions = []
-            for batch, batch_viewdirs in zip(batches, batches_viewdirs):
-                predictions.append(self.fine_model(batch, viewdirs=batch_viewdirs))
-            raw = torch.cat(predictions, dim=0)
-            raw = raw.reshape(list(query_points.shape[:2]) + [raw.shape[-1]])
+            sample_enc = self.encoding_fn(means_covs_fine)
+            if self.viewdirs_encoding_fn is not None:
+                viewdirs_enc = self.viewdirs_encoding_fn(rays.viewdirs)
+                raw_rgb_fine, raw_density_fine = self.fine_model(sample_enc, viewdirs_enc)
+            else:
+                raw_rgb_fine, raw_density_fine = self.fine_model(sample_enc)
 
             # Perform differentiable volume rendering to re-synthesize the RGB image.
-            rgb_map, depth_map, acc_map, weights = raw2outputs(raw, z_vals_combined, rays_d)
+            rgb_map, depth_map, acc_map, weights = raw2outputs(raw_rgb_fine, z_vals_fine, rays.directions,
+                                                               raw_noise_std=self.ss.raw_noise_std)
 
-            # Store outputs.
-            outputs['z_vals_hierarchical'] = z_hierarch
-            outputs['rgb_map_0'] = rgb_map_0
-            outputs['depth_map_0'] = depth_map_0
-            outputs['acc_map_0'] = acc_map_0
-
-        # Store outputs.
-        outputs['rgb_map'] = rgb_map
-        outputs['depth_map'] = depth_map
-        outputs['acc_map'] = acc_map
-        outputs['weights'] = weights
+            outputs['z_vals_hierarchical'] = z_vals_fine
+            outputs['rgb_map'] = rgb_map
+            outputs['depth_map'] = depth_map
+            outputs['acc_map'] = acc_map
+            outputs['weights'] = weights
         return outputs
 
     def get_chunks(self,

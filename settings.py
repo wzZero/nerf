@@ -28,6 +28,9 @@ class Settings:
         self.n_samples_hierarchical = 64     # Number of samples per ray
         self.perturb_hierarchical = False    # If set, applies noise to sample positions
 
+        # Volumn Rendering
+        self.raw_noise_std = 0.0
+
         # Optimizer
         self.lr = 5e-4               # Learning rate
 
