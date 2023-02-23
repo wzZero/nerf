@@ -152,9 +152,10 @@ class BlenderDataset(BaseDataset):
 
 
 
-def load_train_dataset(file_path):
+def load_dataset(file_path):
     ss = Settings()
-    dataset = BlenderDataset(file_path)
-    sampler = DistributedSampler(dataset)
-    loader = DataLoader(dataset, shuffle=False, sampler=sampler, batch_size=ss.batch_size)
-    return loader, sampler, dataset
+    train_set = BlenderDataset(file_path, split='train')
+    val_set = BlenderDataset(file_path, split='val')
+    train_sampler = DistributedSampler(train_set)
+    train_loader = DataLoader(train_set, shuffle=False, sampler=train_sampler, batch_size=ss.batch_size)
+    return train_loader, train_sampler, train_set, val_set
