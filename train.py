@@ -140,7 +140,7 @@ def main():
             # psnr = -10.0 * torch.log10(loss)
             # train_psnrs.append(psnr.item())
 
-        writer.add_scalar('loss', 0 , i + 1) # i_loss / n_batch
+        writer.add_scalar('loss', i_loss/n_batch, i + 1) # i_loss / n_batch
 
         # Check PSNR for issues and stop if any are found.
         # if i == settings.warmup_iters - 1:
@@ -159,9 +159,9 @@ def main():
         if (i + 1) % settings.display_rate == 0:
             model.eval()
             coarse, fine, val = render(model, settings, i, val_set, train_psnrs, iternums)
-            writer.add_image('coarse', coarse)
-            writer.add_image('fine', fine)
-            writer.add_image('val', val)
+            writer.add_image('coarse', coarse, i+1)
+            writer.add_image('fine', fine, i+1)
+            writer.add_image('val', val, i+1)
 
         if i_loss/n_batch < best_loss:
             best_loss = i_loss/n_batch
