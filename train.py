@@ -19,7 +19,7 @@ from dataset import load_dataset
 
 
 # TODO render image
-def render(model, settings, dataloader, train_psnrs, iternums, val_psnrs):
+def render(model, settings, dataloader):
     rays, image = next(dataloader)
     N, h, w, _ = image.shape
     single_image_rays, val_mask = rearrange_render_image(
@@ -158,7 +158,7 @@ def main():
 
         if (i + 1) % settings.display_rate == 0:
             model.eval()
-            coarse, fine, val = render(model, settings, i, val_set, train_psnrs, iternums)
+            coarse, fine, val = render(model, settings, val_loader)
             writer.add_image('coarse', coarse, i+1)
             writer.add_image('fine', fine, i+1)
             writer.add_image('val', val, i+1)
