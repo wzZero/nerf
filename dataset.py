@@ -24,7 +24,7 @@ def namedtuple_map(fn, tup):
 class BaseDataset(Dataset):
     """BaseDataset Base Class."""
 
-    def __init__(self, data_dir, split, white_bkgd=False, factor=0):
+    def __init__(self, data_dir, split, device, white_bkgd=False, factor=0):
         super(BaseDataset, self).__init__()
         self.near = 2
         self.far = 6
@@ -36,11 +36,15 @@ class BaseDataset(Dataset):
         self.it = -1
         self.n_examples = 1
         self.factor = factor
+        self.device = device
 
     def _flatten(self, x):
         # Always flatten out the height x width dimensions
         x = [y.reshape([-1, y.shape[-1]]) for y in x]
         x = np.concatenate(x, axis=0)
+        return x
+    def _to_device(self, x):
+        x = torch.from_numpy(x).to(self.device)
         return x
 
     def _train_init(self):
@@ -71,11 +75,11 @@ class BaseDataset(Dataset):
             index = (self.it + 1) % self.n_examples
             self.it += 1
         rays = Rays(*[getattr(self.rays, key)[index] for key in Ray_keys])
-        return rays, self.images[index]
+        return namedtuple_map(self._to_device, rays), self._to_device(self.images[index])
 
 class BlenderDataset(BaseDataset):
-    def __init__(self, filepath, split='train', white_bkgd=False, factor=0):
-        super(BlenderDataset, self).__init__(filepath, split, white_bkgd, factor)
+    def __init__(self, filepath, split, device, white_bkgd=False, factor=0):
+        super(BlenderDataset, self).__init__(filepath, split, device, white_bkgd, factor)
         if split == 'train':
             self._train_init()
         else:
@@ -156,10 +160,10 @@ class BlenderDataset(BaseDataset):
 
 
 
-def load_dataset(ss: Settings):
+def load_dataset(ss: Settings, device):
     # ss = Settings()
-    train_set = BlenderDataset(ss.filepath, split='train')
-    val_set = BlenderDataset(ss.filepath, split='val')
+    train_set = BlenderDataset(ss.filepath, split='train', device=device)
+    val_set = BlenderDataset(ss.filepath, split='val', device=device)
     train_sampler = DistributedSampler(train_set)
     train_loader = DataLoader(train_set, shuffle=False, sampler=train_sampler, batch_size=ss.batch_size)
     return train_loader, train_sampler, train_set, val_set

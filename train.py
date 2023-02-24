@@ -70,10 +70,12 @@ def main():
     settings = Settings()
     model = MipNeRFWrapper(settings)
     optimizer = torch.optim.Adam(model.parameters(), lr=settings.lr)
-    train_loader, train_sampler, train_set, val_set = load_dataset(settings)
+    train_loader, train_sampler, train_set, val_set = load_dataset(settings, device)
     num_gpus = torch.cuda.device_count()
     if num_gpus > 1:
         model = torch.nn.DataParallel(model, device_ids=[args.local_rank])
+    else:
+        model = model.to(device)
 
     train_psnrs = []
     val_psnrs = []
