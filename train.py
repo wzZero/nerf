@@ -4,60 +4,85 @@ import argparse
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 from typing import Optional
 from matplotlib import pyplot as plt
 
+from utils import rearrange_render_image
+from torch.utils.tensorboard import SummaryWriter
+
 from mipnerf import MipNeRFWrapper
 from settings import Settings
 from dataset import load_dataset
 
-def render(model, settings, iter, dataset, train_psnrs, iternums, val_psnrs):
-    rays, iamge = dataset[settings.val_id]
-    outputs = model(rays)
+#TODO render image
+def render(model, settings, dataloader, train_psnrs, iternums, val_psnrs):
+    rays, image = next(dataloader)
+    N, h, w, _ = image.shape
+    single_image_rays, val_mask = rearrange_render_image(
+        rays, settings.val_chunk_size)
+    coarse_rgb = []
+    fine_rgb = []
+    #distances = []
+    with torch.no_grad():
+        for batch_rays in single_image_rays:
+            outputs = model(batch_rays)
+            coarse_rgb.append(outputs['rgb_map_0'])
+            fine_rgb.append(outputs['rgb_map'])
+            #distances.append(outputs['depth_map'])
 
-    def plot_samples(
-        z_vals: torch.Tensor,
-        z_hierarch: Optional[torch.Tensor] = None,
-        ax: Optional[np.ndarray] = None
-    ):
-        """
-        Plot stratified and (optional) hierarchical samples.
-        """
-        y_vals = 1 + np.zeros_like(z_vals)
-        if ax is None:
-            ax = plt.subplot()
-        ax.plot(z_vals, y_vals, 'b-o')
-        if z_hierarch is not None:
-            y_hierarch = np.zeros_like(z_hierarch)
-            ax.plot(z_hierarch, y_hierarch, 'r-o')
-        ax.set_ylim([-1, 2])
-        ax.set_title('Stratified  Samples (blue) and Hierarchical Samples (red)')
-        ax.axes.yaxis.set_visible(False)
-        ax.grid(True)
-        return ax
+    coarse_rgb = torch.cat(coarse_rgb, dim=0)
+    fine_rgb = torch.cat(fine_rgb, dim=0)
 
-    fig, ax = plt.subplots(1, 4, figsize=(24, 4), gridspec_kw={'width_ratios': [1, 1, 1, 3]})
-    ax[0].imshow(outputs["rgb_map"].reshape([dataset.h, dataset.w, 3]).detach().cpu().numpy())
-    ax[0].set_title(f'Iteration: {iter + 1}')
-    ax[1].imshow(dataset.images[settings.val_id].detach().cpu().numpy())
-    ax[1].set_title(f'Target')
-    ax[2].plot(range(0, iter + 1), train_psnrs, 'r')
-    ax[2].plot(iternums, val_psnrs, 'b')
-    ax[2].set_title('PSNR (train=red, val=blue')
-    z_vals_strat = outputs['z_vals_stratified'].view((-1, settings.n_samples))
-    z_sample_strat = z_vals_strat[z_vals_strat.shape[0] // 2].detach().cpu().numpy()
-    if 'z_vals_hierarchical' in outputs:
-        z_vals_hierarch = outputs['z_vals_hierarchical'].view(
-            (-1, settings.n_samples_hierarchical))
-        z_sample_hierarch = z_vals_hierarch[z_vals_hierarch.shape[0] // 2].detach().cpu().numpy()
-    else:
-        z_sample_hierarch = None
-    plot_samples(z_sample_strat, z_sample_hierarch, ax=ax[3])
-    ax[3].margins(0)
-    plt.show()
+    coarse_rgb = coarse_rgb.reshape(
+        N, h, w, coarse_rgb.shape[-1])  # N H W C
+    fine_rgb = fine_rgb.reshape(
+        N, h, w, fine_rgb.shape[-1])
 
+    # def plot_samples(
+    #     z_vals: torch.Tensor,
+    #     z_hierarch: Optional[torch.Tensor] = None,
+    #     ax: Optional[np.ndarray] = None
+    # ):
+    #     """
+    #     Plot stratified and (optional) hierarchical samples.
+    #     """
+    #     y_vals = 1 + np.zeros_like(z_vals)
+    #     if ax is None:
+    #         ax = plt.subplot()
+    #     ax.plot(z_vals, y_vals, 'b-o')
+    #     if z_hierarch is not None:
+    #         y_hierarch = np.zeros_like(z_hierarch)
+    #         ax.plot(z_hierarch, y_hierarch, 'r-o')
+    #     ax.set_ylim([-1, 2])
+    #     ax.set_title('Stratified  Samples (blue) and Hierarchical Samples (red)')
+    #     ax.axes.yaxis.set_visible(False)
+    #     ax.grid(True)
+    #     return ax
+    #
+    # fig, ax = plt.subplots(1, 4, figsize=(24, 4), gridspec_kw={'width_ratios': [1, 1, 1, 3]})
+    # ax[0].imshow(outputs["rgb_map"].reshape([dataset.h, dataset.w, 3]).detach().cpu().numpy())
+    # ax[0].set_title(f'Iteration: {iter + 1}')
+    # ax[1].imshow(dataset.images[settings.val_id].detach().cpu().numpy())
+    # ax[1].set_title(f'Target')
+    # ax[2].plot(range(0, iter + 1), train_psnrs, 'r')
+    # ax[2].plot(iternums, val_psnrs, 'b')
+    # ax[2].set_title('PSNR (train=red, val=blue')
+    # z_vals_strat = outputs['z_vals_stratified'].view((-1, settings.n_samples))
+    # z_sample_strat = z_vals_strat[z_vals_strat.shape[0] // 2].detach().cpu().numpy()
+    # if 'z_vals_hierarchical' in outputs:
+    #     z_vals_hierarch = outputs['z_vals_hierarchical'].view(
+    #         (-1, settings.n_samples_hierarchical))
+    #     z_sample_hierarch = z_vals_hierarch[z_vals_hierarch.shape[0] // 2].detach().cpu().numpy()
+    # else:
+    #     z_sample_hierarch = None
+    # plot_samples(z_sample_strat, z_sample_hierarch, ax=ax[3])
+    # ax[3].margins(0)
+    # plt.show()
+
+# TODO: use tensorboard
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--local_rank", default=os.getenv("LOCAL_RANK", -1), type=int)
@@ -70,7 +95,8 @@ def main():
     settings = Settings()
     model = MipNeRFWrapper(settings)
     optimizer = torch.optim.Adam(model.parameters(), lr=settings.lr)
-    train_loader, train_sampler, train_set, val_set = load_dataset(settings, device)
+    train_loader, train_sampler, train_set, val_set, val_loader = load_dataset(settings, device)
+
     num_gpus = torch.cuda.device_count()
     if num_gpus > 1:
         model = torch.nn.DataParallel(model, device_ids=[args.local_rank])

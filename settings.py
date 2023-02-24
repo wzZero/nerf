@@ -53,6 +53,8 @@ class Settings:
 
         # val
         self.val_id = 0
+        self.val_batch_size = 1
+        self.val_chunk_size = 2048
 
         # Early Stopping
         self.warmup_iters = 100          # Number of iterations during warmup phase

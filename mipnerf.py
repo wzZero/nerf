@@ -192,3 +192,5 @@ class MipNeRFWrapper(nn.Module):
         viewdirs = encoding_function(viewdirs)
         viewdirs = self.get_chunks(viewdirs, chunksize=chunksize)
         return viewdirs
+
+

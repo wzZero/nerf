@@ -166,4 +166,5 @@ def load_dataset(ss: Settings, device):
     val_set = BlenderDataset(ss.filepath, split='val', device=device)
     train_sampler = DistributedSampler(train_set)
     train_loader = DataLoader(train_set, shuffle=False, sampler=train_sampler, batch_size=ss.batch_size)
-    return train_loader, train_sampler, train_set, val_set
+    val_loader = DataLoader(val_set, shuffle=True, batch_size=ss.val_batch_size)
+    return train_loader, train_sampler, train_set, val_set, val_loader
