@@ -40,6 +40,7 @@ def render(model, settings, dataloader, train_psnrs, iternums, val_psnrs):
         N, h, w, coarse_rgb.shape[-1])  # N H W C
     fine_rgb = fine_rgb.reshape(
         N, h, w, fine_rgb.shape[-1])
+    return coarse_rgb, fine_rgb, image
 
     # def plot_samples(
     #     z_vals: torch.Tensor,
@@ -88,11 +89,13 @@ def main():
     parser.add_argument("--local_rank", default=os.getenv("LOCAL_RANK", -1), type=int)
     args = parser.parse_args()
 
+
     torch.cuda.set_device(args.local_rank)
     torch.distributed.init_process_group(backend="nccl")
     device = torch.device("cuda", args.local_rank)
 
     settings = Settings()
+    writer = SummaryWriter(settings.log_dir)
     model = MipNeRFWrapper(settings)
     optimizer = torch.optim.Adam(model.parameters(), lr=settings.lr)
     train_loader, train_sampler, train_set, val_set, val_loader = load_dataset(settings, device)
@@ -144,9 +147,12 @@ def main():
             #         )
             #         return False, train_psnrs, val_psnrs
 
-            # if (i + 1) % settings.display_rate == 0:
-            #     model.eval()
-            #     render(model, settings, i, val_set, train_psnrs, iternums, val_psnrs)
+            if (i + 1) % settings.display_rate == 0:
+                model.eval()
+                coarse, fine, val = render(model, settings, i, val_set, train_psnrs, iternums)
+                writer.add_image('coarse', coarse)
+                writer.add_image('fine', fine)
+                writer.add_image('val', val)
 
             pbar.update(1)
 

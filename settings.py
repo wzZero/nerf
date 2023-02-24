@@ -56,6 +56,11 @@ class Settings:
         self.val_batch_size = 1
         self.val_chunk_size = 2048
 
+        # log
+        self.log_dir = 'set when use'
+        self.val_iter = 'please set'
+        self.ckpt_save_iter = 'please set'
+
         # Early Stopping
         self.warmup_iters = 100          # Number of iterations during warmup phase
         self.warmup_min_fitness = 10.0   # Min val PSNR to continue training at warmup_iters
