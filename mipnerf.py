@@ -88,12 +88,8 @@ class MipNeRFWrapper(nn.Module):
             self.viewdirs_encoding_fn = None
             d_viewdirs = None
 
-        # models
-        self.coarse_model = NeRF(self.ss.embedding_len, self.ss.n_layers, self.ss.d_filter, self.ss.skip, d_viewdirs)
-        if self.ss.use_fine_model:
-            self.fine_model = NeRF(self.ss.embedding_len, self.ss.n_layers, self.ss.d_filter, self.ss.skip, d_viewdirs)
-        else:
-            self.fine_model = None
+        # only one mlp is needed in mipnerf
+        self.mlp = NeRF(self.ss.embedding_len, self.ss.n_layers, self.ss.d_filter, self.ss.skip, d_viewdirs)
 
     def forward(self, rays, randomized=False):
         """
@@ -115,9 +111,9 @@ class MipNeRFWrapper(nn.Module):
         sample_enc = self.encoding_fn(mean_covs)
         if self.ss.use_viewdirs:
             viewdirs_enc = self.viewdirs_encoding_fn(rays.viewdirs)
-            raw = self.coarse_model(sample_enc, viewdirs_enc)
+            raw = self.mlp(sample_enc, viewdirs_enc)
         else:
-            raw = self.coarse_model(sample_enc)
+            raw = self.mlp(sample_enc)
 
         rgb_map_0, depth_map_0, acc_map_0, weights_0 = raw2outputs(
             raw,
@@ -146,15 +142,15 @@ class MipNeRFWrapper(nn.Module):
             # Prepare inputs as before.
 
             # Forward pass new samples through fine model.
-            if self.fine_model is None:
-                self.fine_model = self.coarse_model
+            # if self.fine_model is None:
+            #     self.fine_model = self.coarse_model
 
             sample_enc = self.encoding_fn(means_covs_fine)
             if self.viewdirs_encoding_fn is not None:
                 viewdirs_enc = self.viewdirs_encoding_fn(rays.viewdirs)
-                raw_fine = self.fine_model(sample_enc, viewdirs_enc)
+                raw_fine = self.mlp(sample_enc, viewdirs_enc)
             else:
-                raw_fine = self.fine_model(sample_enc)
+                raw_fine = self.mlp(sample_enc)
             # Perform differentiable volume rendering to re-synthesize the RGB image.
             rgb_map, depth_map, acc_map, weights = raw2outputs(raw_fine, z_vals_fine, rays.directions,
                                                                raw_noise_std=self.ss.raw_noise_std)
