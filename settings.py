@@ -3,7 +3,7 @@
 class Settings:
     def __init__(self):
         # dataset
-        self.filepath = 'set when training'
+        self.filepath = './data/nerf_synthetic/lego'
 
         # Encoders
         self.d_input = 3             # Number of input dimensions

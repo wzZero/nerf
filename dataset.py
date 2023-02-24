@@ -116,24 +116,24 @@ class BlenderDataset(BaseDataset):
     def _generate_rays(self):
         # Apply pinhole camera model to gather directions at each pixel
         x, y = torch.meshgrid(
-            torch.arange(self.width, dtype=torch.float32),
-            torch.arange(self.height, dtype=torch.float32),
+            torch.arange(self.w, dtype=torch.float32),
+            torch.arange(self.h, dtype=torch.float32),
             indexing='xy'
         )
         camera_dirs = torch.stack(
             [
-                (x - self.width * 0.5) / self.focal,
-                -(y - self.height * 0.5) / self.focal,
+                (x - self.w * 0.5) / self.focal,
+                -(y - self.h * 0.5) / self.focal,
                 -torch.ones_like(x)
             ],
             dim=-1
         )
 
         # Apply camera pose to directions
-        rays_d = [(camera_dirs @ c2w[:3, :3].T).copy() for c2w in self.poses]
+        rays_d = [(camera_dirs @ c2w[:3, :3].T).copy() for c2w in self.camtoworlds]
         rays_o = [
             np.broadcast_to(c2w[:3, -1], v.shape).copy()
-            for v, c2w in zip(rays_d, self.poses)
+            for v, c2w in zip(rays_d, self.camtoworlds)
         ]
 
         # Distance from each unit-norm direction vector to its x-axis neighbor.

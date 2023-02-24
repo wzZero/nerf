@@ -115,9 +115,9 @@ def main():
             #         )
             #         return False, train_psnrs, val_psnrs
 
-            if (i + 1) % settings.display_rate == 0:
-                model.eval()
-                render(model, settings, i, val_set, train_psnrs, iternums, val_psnrs)
+            # if (i + 1) % settings.display_rate == 0:
+            #     model.eval()
+            #     render(model, settings, i, val_set, train_psnrs, iternums, val_psnrs)
 
             pbar.update(1)
 
