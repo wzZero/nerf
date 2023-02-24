@@ -14,7 +14,7 @@ from settings import Settings
 
 Rays = collections.namedtuple(
     'Rays',
-    ('origins', 'directions', 'radii'))
+    ('origins', 'directions', 'radii', 'viewdir'))
 Ray_keys = Rays._fields
 
 def namedtuple_map(fn, tup):
@@ -135,6 +135,9 @@ class BlenderDataset(BaseDataset):
             np.broadcast_to(c2w[:3, -1], v.shape).copy()
             for v, c2w in zip(rays_d, self.camtoworlds)
         ]
+        viewdir = [
+            v / np.linalg.norm(v, axis=-1, keepdims=True) for v in rays_d
+        ]
 
         # Distance from each unit-norm direction vector to its x-axis neighbor.
         dx = [
@@ -148,6 +151,7 @@ class BlenderDataset(BaseDataset):
             origins=rays_o,
             directions=rays_d,
             radii=radii,
+            viewdir=viewdir,
             )
 
 
