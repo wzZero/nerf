@@ -17,7 +17,8 @@ from mipnerf import MipNeRFWrapper
 from settings import Settings
 from dataset import load_dataset
 
-#TODO render image
+
+# TODO render image
 def render(model, settings, dataloader, train_psnrs, iternums, val_psnrs):
     rays, image = next(dataloader)
     N, h, w, _ = image.shape
@@ -25,13 +26,13 @@ def render(model, settings, dataloader, train_psnrs, iternums, val_psnrs):
         rays, settings.val_chunk_size)
     coarse_rgb = []
     fine_rgb = []
-    #distances = []
+    # distances = []
     with torch.no_grad():
         for batch_rays in single_image_rays:
             outputs = model(batch_rays)
             coarse_rgb.append(outputs['rgb_map_0'])
             fine_rgb.append(outputs['rgb_map'])
-            #distances.append(outputs['depth_map'])
+            # distances.append(outputs['depth_map'])
 
     coarse_rgb = torch.cat(coarse_rgb, dim=0)
     fine_rgb = torch.cat(fine_rgb, dim=0)
@@ -83,12 +84,11 @@ def render(model, settings, dataloader, train_psnrs, iternums, val_psnrs):
     # ax[3].margins(0)
     # plt.show()
 
-# TODO: use tensorboard
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--local_rank", default=os.getenv("LOCAL_RANK", -1), type=int)
     args = parser.parse_args()
-
 
     torch.cuda.set_device(args.local_rank)
     torch.distributed.init_process_group(backend="nccl")
@@ -99,6 +99,7 @@ def main():
     model = MipNeRFWrapper(settings)
     optimizer = torch.optim.Adam(model.parameters(), lr=settings.lr)
     train_loader, train_sampler, train_set, val_set, val_loader = load_dataset(settings, device)
+    lr_sched = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2500, 5000, 7500, 10000])
 
     num_gpus = torch.cuda.device_count()
     if num_gpus > 1:
@@ -110,51 +111,65 @@ def main():
     val_psnrs = []
     iternums = []
 
-    with tqdm(total=settings.n_iters, position=args.local_rank * 2) as pbar:
-        for i in range(settings.n_iters):
-            model.train()
-            train_sampler.set_epoch(i)
-            for rays, rgb in train_loader:
-                rgb = rgb.to(device)
-                outputs = model(rays)
-                # Check for any numerical issues.
-                for k, v in outputs.items():
-                    if torch.isnan(v).any():
-                        print(f"! [Numerical Alert] {k} contains NaN.")
-                    if torch.isinf(v).any():
-                        print(f"! [Numerical Alert] {k} contains Inf.")
+    # with tqdm(total=settings.n_iters, position=args.local_rank * 2) as pbar:
+    best_loss = 99999
+    for i in range(settings.n_iters):
+        model.train()
+        train_sampler.set_epoch(i)
+        i_loss = 0
+        n_batch = 0
 
-                loss = F.mse_loss(outputs["rgb_map"], rgb)
-                pbar.set_description("GPU {} Loss: {:.4f}".format(args.local_rank, loss.item()))
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                psnr = -10.0 * torch.log10(loss)
-                train_psnrs.append(psnr.item())
+        for _,(rays, rgb) in enumerate(tqdm(train_loader)):
+            rgb = rgb.to(device)
+            outputs = model(rays)
+            # Check for any numerical issues.
+            for k, v in outputs.items():
+                if torch.isnan(v).any():
+                    print(f"! [Numerical Alert] {k} contains NaN.")
+                if torch.isinf(v).any():
+                    print(f"! [Numerical Alert] {k} contains Inf.")
 
+            loss = F.mse_loss(outputs["rgb_map"], rgb)
+            i_loss += loss.item()
+            n_batch += 1
+            # pbar.set_description("GPU {} Loss: {:.4f}".format(args.local_rank, loss.item()))
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-            # Check PSNR for issues and stop if any are found.
-            # if i == settings.warmup_iters - 1:
-            #     if val_psnr < settings.warmup_min_fitness:
-            #         print(
-            #             f'Val PSNR {val_psnr} below warmup_min_fitness {settings.warmup_min_fitness}. Stopping...'
-            #         )
-            #         return False, train_psnrs, val_psnrs
-            # elif i < settings.warmup_iters:
-            #     if warmup_stopper is not None and warmup_stopper(i, psnr):
-            #         print(
-            #             f'Train PSNR flatlined at {psnr} for {warmup_stopper.patience} iters. Stopping...'
-            #         )
-            #         return False, train_psnrs, val_psnrs
+            # psnr = -10.0 * torch.log10(loss)
+            # train_psnrs.append(psnr.item())
 
-            if (i + 1) % settings.display_rate == 0:
-                model.eval()
-                coarse, fine, val = render(model, settings, i, val_set, train_psnrs, iternums)
-                writer.add_image('coarse', coarse)
-                writer.add_image('fine', fine)
-                writer.add_image('val', val)
+        writer.add_scalar('loss', 0 , i + 1) # i_loss / n_batch
 
-            pbar.update(1)
+        # Check PSNR for issues and stop if any are found.
+        # if i == settings.warmup_iters - 1:
+        #     if val_psnr < settings.warmup_min_fitness:
+        #         print(
+        #             f'Val PSNR {val_psnr} below warmup_min_fitness {settings.warmup_min_fitness}. Stopping...'
+        #         )
+        #         return False, train_psnrs, val_psnrs
+        # elif i < settings.warmup_iters:
+        #     if warmup_stopper is not None and warmup_stopper(i, psnr):
+        #         print(
+        #             f'Train PSNR flatlined at {psnr} for {warmup_stopper.patience} iters. Stopping...'
+        #         )
+        #         return False, train_psnrs, val_psnrs
+
+        if (i + 1) % settings.display_rate == 0:
+            model.eval()
+            coarse, fine, val = render(model, settings, i, val_set, train_psnrs, iternums)
+            writer.add_image('coarse', coarse)
+            writer.add_image('fine', fine)
+            writer.add_image('val', val)
+
+        if i_loss/n_batch < best_loss:
+            best_loss = i_loss/n_batch
+            if not os.path.exists('./ckpt'):
+                os.makedirs('./ckpt')
+            torch.save(model.state_dict(), './ckpt/ckpt_mipnerf_loss_%.6f.t7' % best_loss)
+            torch.distributed.barrier()
+        # pbar.update(1)
+        lr_sched.step()
 
 main()
-

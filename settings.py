@@ -3,8 +3,8 @@
 class Settings:
     def __init__(self):
         # dataset
-        self.filepath = '/home/xuhao/dev/nerf/data/nerf_synthetic/lego'
-        # self.filepath = '/home/wzzero/dataset/nerf_synthetic/lego/'
+        # self.filepath = '/home/xuhao/dev/nerf/data/nerf_synthetic/lego'
+        self.filepath = '/home/wzzero/dataset/nerf_synthetic/lego/'
 
         # Encoders
         self.d_input = 3             # Number of input dimensions
@@ -57,7 +57,7 @@ class Settings:
         self.val_chunk_size = 2048
 
         # log
-        self.log_dir = 'set when use'
+        self.log_dir = 'log/mipnerf'
         self.val_iter = 'please set'
         self.ckpt_save_iter = 'please set'
 
