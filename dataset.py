@@ -84,7 +84,7 @@ class BlenderDataset(BaseDataset):
     def _load_images(self):
         """Load images from disk."""
         with open(path.join(self.data_dir, 'transforms_{}.json'.format(self.split)), 'r') as fp:
-            meta = json.load(fp)
+            meta = json.load(fp,strict=False)
         images = []
         cams = []
         for i in range(len(meta['frames'])):
@@ -120,13 +120,13 @@ class BlenderDataset(BaseDataset):
             torch.arange(self.h, dtype=torch.float32),
             indexing='xy'
         )
-        camera_dirs = torch.stack(
+        camera_dirs = np.stack(
             [
                 (x - self.w * 0.5) / self.focal,
                 -(y - self.h * 0.5) / self.focal,
-                -torch.ones_like(x)
+                -np.ones_like(x)
             ],
-            dim=-1
+            axis=-1
         )
 
         # Apply camera pose to directions
@@ -152,10 +152,10 @@ class BlenderDataset(BaseDataset):
 
 
 
-def load_dataset(file_path):
-    ss = Settings()
-    train_set = BlenderDataset(file_path, split='train')
-    val_set = BlenderDataset(file_path, split='val')
+def load_dataset(ss: Settings):
+    # ss = Settings()
+    train_set = BlenderDataset(ss.filepath, split='train')
+    val_set = BlenderDataset(ss.filepath, split='val')
     train_sampler = DistributedSampler(train_set)
     train_loader = DataLoader(train_set, shuffle=False, sampler=train_sampler, batch_size=ss.batch_size)
     return train_loader, train_sampler, train_set, val_set

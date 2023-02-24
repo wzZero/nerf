@@ -20,7 +20,7 @@ def raw2outputs(
     # Difference between consecutive elements of `z_vals`. [n_rays, n_samples]
     z_mids = 0.5 * (z_vals[..., :-1] + z_vals[..., 1:])
     dists = z_vals[..., 1:] - z_vals[..., :-1]
-    dists = torch.cat([dists, 1e10 * torch.ones_like(dists[..., :1])], dim=-1)
+    # dists = torch.cat([dists, 1e10 * torch.ones_like(dists[..., :1])], dim=-1)
 
     # Multiply each distance by the norm of its corresponding direction ray
     # to convert to real world distance (accounts for non-unit directions).

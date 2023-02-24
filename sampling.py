@@ -12,7 +12,7 @@ def stratified_sample(
         n_samples: int,
         perturb: Optional[bool] = True,
         inverse_depth: Optional[bool] = False,
-):
+) -> Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
     t_vals = torch.linspace(0.0, 1.0, n_samples + 1, device=rays_o.device)
 
     if not inverse_depth:
@@ -24,9 +24,9 @@ def stratified_sample(
         mids = 0.5 * (z_vals[1:] + z_vals[:-1])
         upper = torch.cat([mids, z_vals[-1:]])
         lower = torch.cat([z_vals[:1], mids])
-        t_rand = torch.rand([n_samples], device=z_vals.device)
+        t_rand = torch.rand([n_samples+1], device=z_vals.device)
         z_vals = lower + (upper - lower) * t_rand
-    z_vals = z_vals.expand(list(rays_o.shape[:-1]) + [n_samples])
+    z_vals = z_vals.expand(list(rays_o.shape[:-1]) + [n_samples+1])
     means, covs = cast_rays(z_vals, rays_o, rays_d, radii)
     return (means, covs), z_vals
 
@@ -40,7 +40,8 @@ def hierarchical_sample(
         radii: float,
         n_samples: int,
         perturb: Optional[bool] = False
-):
+
+) -> Tuple[Tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
 
     weights_pad = torch.cat([weights[..., :1], weights, weights[..., -1:]], dim=-1)
     weights_max = torch.maximum(weights_pad[..., :-1], weights_pad[..., 1:])

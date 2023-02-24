@@ -70,7 +70,7 @@ def main():
     settings = Settings()
     model = MipNeRFWrapper(settings)
     optimizer = torch.optim.Adam(model.parameters(), lr=settings.lr)
-    train_loader, train_sampler, train_set, val_set = load_dataset(settings.filepath)
+    train_loader, train_sampler, train_set, val_set = load_dataset(settings)
     num_gpus = torch.cuda.device_count()
     if num_gpus > 1:
         model = torch.nn.DataParallel(model, device_ids=[args.local_rank])
@@ -84,6 +84,7 @@ def main():
             model.train()
             train_sampler.set_epoch(i)
             for rays, rgb in train_loader:
+                rgb = rgb.to(device)
                 outputs = model(rays)
                 # Check for any numerical issues.
                 for k, v in outputs.items():

@@ -76,7 +76,7 @@ class MipNeRFWrapper(nn.Module):
         self.ss = settings
 
         # encoders
-        encoder = IntegratedPositionalEncoder(self.ss.d_input, self.ss.n_freqs, log_space=self.ss.log_space)
+        encoder = IntegratedPositionalEncoder(self.ss.min_deg, self.ss.max_deg, log_space=self.ss.log_space)
         self.encoding_fn = lambda x: encoder(x)
 
         # view direction encoders
@@ -89,13 +89,13 @@ class MipNeRFWrapper(nn.Module):
             d_viewdirs = None
 
         # models
-        self.coarse_model = NeRF(encoder.d_output, self.ss.n_layers, self.ss.d_filter, self.ss.skip, d_viewdirs)
+        self.coarse_model = NeRF(self.ss.embedding_len, self.ss.n_layers, self.ss.d_filter, self.ss.skip, d_viewdirs)
         if self.ss.use_fine_model:
-            self.fine_model = NeRF(encoder.d_output, self.ss.n_layers, self.ss.d_filter, self.ss.skip, d_viewdirs)
+            self.fine_model = NeRF(self.ss.embedding_len, self.ss.n_layers, self.ss.d_filter, self.ss.skip, d_viewdirs)
         else:
             self.fine_model = None
 
-    def forward(self, rays, randomized):
+    def forward(self, rays, randomized=False):
         """
         :param rays: batch * (ray_o,ray_d,view_dirs)
         :return:
@@ -106,21 +106,21 @@ class MipNeRFWrapper(nn.Module):
         mean_covs, z_vals = stratified_sample(
             rays.origins,
             rays.directions,
-            rays.near,
-            rays.far,
+            self.ss.near,
+            self.ss.far,
             rays.radii,
             **self.ss.kwargs_sample_stratified
         )
 
         sample_enc = self.encoding_fn(mean_covs)
-        if self.viewdirs_encoding_fn is not None:
+        if self.ss.use_viewdirs:
             viewdirs_enc = self.viewdirs_encoding_fn(rays.viewdirs)
-            raw_rgb, raw_density = self.coarse_model(sample_enc, viewdirs_enc)
+            raw = self.coarse_model(sample_enc, viewdirs_enc)
         else:
-            raw_rgb, raw_density = self.coarse_model(sample_enc)
+            raw = self.coarse_model(sample_enc)
 
         rgb_map_0, depth_map_0, acc_map_0, weights_0 = raw2outputs(
-            raw_rgb,
+            raw,
             z_vals,
             rays.directions,
             raw_noise_std=self.ss.raw_noise_std
@@ -152,12 +152,11 @@ class MipNeRFWrapper(nn.Module):
             sample_enc = self.encoding_fn(means_covs_fine)
             if self.viewdirs_encoding_fn is not None:
                 viewdirs_enc = self.viewdirs_encoding_fn(rays.viewdirs)
-                raw_rgb_fine, raw_density_fine = self.fine_model(sample_enc, viewdirs_enc)
+                raw_fine = self.fine_model(sample_enc, viewdirs_enc)
             else:
-                raw_rgb_fine, raw_density_fine = self.fine_model(sample_enc)
-
+                raw_fine = self.fine_model(sample_enc)
             # Perform differentiable volume rendering to re-synthesize the RGB image.
-            rgb_map, depth_map, acc_map, weights = raw2outputs(raw_rgb_fine, z_vals_fine, rays.directions,
+            rgb_map, depth_map, acc_map, weights = raw2outputs(raw_fine, z_vals_fine, rays.directions,
                                                                raw_noise_std=self.ss.raw_noise_std)
 
             outputs['z_vals_hierarchical'] = z_vals_fine

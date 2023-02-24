@@ -40,7 +40,7 @@ def expected_sin(x, x_var):
 
 
 class IntegratedPositionalEncoder(nn.Module):
-    def __init__(self, min_deg, max_deg, diagonal=True):
+    def __init__(self, min_deg, max_deg, log_space,diagonal=True):
         super().__init__()
         self.min_deg = min_deg
         self.max_deg = max_deg

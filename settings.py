@@ -3,14 +3,17 @@
 class Settings:
     def __init__(self):
         # dataset
-        self.filepath = './data/nerf_synthetic/lego'
+        # self.filepath = './data/nerf_synthetic/lego'
+        self.filepath = '/home/wzzero/dataset/nerf_synthetic/lego/'
 
         # Encoders
         self.d_input = 3             # Number of input dimensions
         self.n_freqs = 10            # Number of encoding functions for samples
         self.log_space = True        # If set, frequencies scale in log space
-        self.use_viewdirs = True     # If set, use view direction as input
+        self.use_viewdirs = False    # If set, use view direction as input
         self.n_freqs_views = 4       # Number of encoding functions for views
+        self.min_deg = 0              # Min degree of positional encoding for 3D points.
+        self.max_deg = 16
 
         # Stratified sampling
         self.n_samples = 64          # Number of spatial samples per ray
@@ -20,6 +23,7 @@ class Settings:
         self.far = 6.0
 
         # Model
+        self.embedding_len = 96
         self.d_filter = 128          # Dimensions of linear layer filters
         self.n_layers = 2            # Number of layers in network bottleneck
         self.skip = []               # Layers at which to apply input residual
