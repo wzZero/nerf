@@ -4,7 +4,7 @@ class Settings:
     def __init__(self):
         # dataset
         # self.filepath = '/home/xuhao/dev/nerf/data/nerf_synthetic/lego'
-        self.filepath = '/home/wzzero/dataset/nerf_synthetic/lego/'
+        self.filepath = '/home/wzzero/dataset/nerf_synthetic/tiny.npz'
 
         # Encoders
         self.d_input = 3             # Number of input dimensions
@@ -44,12 +44,12 @@ class Settings:
         # Training
         self.n_training = 100
         self.n_iters = 10000
-        self.batch_size = 2**6          # Number of rays per gradient step (power of 2)
+        self.batch_size = 2**10          # Number of rays per gradient step (power of 2)
         self.one_image_per_step = True   # One image per gradient step (disables batching)
         self.chunksize = 2**6           # Modify as needed to fit in GPU memory
         self.center_crop = True          # Crop the center of image (one_image_per_)
         self.center_crop_iters = 50      # Stop cropping center after this many epochs
-        self.display_rate = 500         # Display test output every X epochs
+        self.display_rate = 1         # Display test output every X epochs
 
         # val
         self.val_id = 0

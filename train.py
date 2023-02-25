@@ -136,6 +136,7 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            lr_sched.step()
 
             # psnr = -10.0 * torch.log10(loss)
             # train_psnrs.append(psnr.item())
@@ -170,6 +171,6 @@ def main():
             torch.save(model.state_dict(), './ckpt/ckpt_mipnerf_loss_%.6f.t7' % best_loss)
             torch.distributed.barrier()
         # pbar.update(1)
-        lr_sched.step()
+
 
 main()
